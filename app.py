@@ -1,26 +1,48 @@
+import glob
+import os
 import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-# 1. Load the trained XGBoost model
-# Change 'model.pkl' to whatever filename your model is saved as
-MODEL_PATH = "model.pkl"
+# 1. App UI Configuration (Must be the first Streamlit command)
+st.set_page_config(page_title="Medical Insurance Cost Predictor", layout="centered")
+
+# 2. Locate and load the model reliably on Streamlit Cloud
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @st.cache_resource
 def load_model():
-    return joblib.load(MODEL_PATH)
+    # Primary expected filename
+    default_path = os.path.join(BASE_DIR, "model.pkl")
+    if os.path.exists(default_path):
+        return joblib.load(default_path)
+
+    # Auto-detect if you named the file differently in your GitHub repo
+    for ext in ("*.pkl", "*.joblib", "*.sav", "*.bin", "*.model"):
+        matches = glob.glob(os.path.join(BASE_DIR, ext))
+        if matches:
+            return joblib.load(matches[0])
+
+    return None
 
 
 model = load_model()
 
-# 2. App UI Configuration
-st.set_page_config(page_title="Medical Insurance Cost Predictor", layout="centered")
+if model is None:
+    st.error("Model file not found in the repository.")
+    st.info(
+        f"Files currently found next to app.py: `{os.listdir(BASE_DIR)}`\n\n"
+        "Please upload your trained model file (e.g., `model.pkl`) to the root folder "
+        "of your `medical_cost_prediction` GitHub repository and reboot the app."
+    )
+    st.stop()
+
+# 3. Main App Interface
 st.title("Medical Insurance Cost Predictor")
 st.write("Enter the details below to estimate annual medical insurance charges.")
 
-# 3. User Input Fields
 col1, col2 = st.columns(2)
 
 with col1:
@@ -37,15 +59,13 @@ with col2:
         "Region", options=["Northeast", "Northwest", "Southeast", "Southwest"]
     )
 
-# 4. Encode categorical inputs to match the model's expected integer types
-# Standard LabelEncoder alphabetical mapping:
+# 4. Encode categorical inputs
 sex_map = {"Female": 0, "Male": 1}
 smoker_map = {"No": 0, "Yes": 1}
 region_map = {"Northeast": 0, "Northwest": 1, "Southeast": 2, "Southwest": 3}
 
 # 5. Predict Button
 if st.button("Predict Insurance Cost", type="primary"):
-    # Create DataFrame with exact feature names and order expected by the XGBoost model
     input_data = pd.DataFrame(
         [
             {
